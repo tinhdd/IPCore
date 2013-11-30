@@ -81,22 +81,41 @@ namespace Image
     inline const unsigned char* Bmp::getDataRGB() const { return dataRGB; }
 
     inline const char* Bmp::getError() const { return errorMessage.c_str(); }
+    
+    /************************************
+	////////////this is class using improcess image simple.
+	detail: convert rgb to gray 
+	        convert rgb to binary.
+	        zoom out image
+	        zoom in image
+	************************************/
+	
+	class improcessImage{
+		private:
+			IplImage* img;
+		public:
+			improcessImage();
+			improcessImage(IplImage* image);
+		    void grayScale(IplImage* image, IplImage* grayImage);
+		    void binaryImage(IplImage* image,IplImage* binary,int nguong);
+		    void dilateImage(IplImage* binary,IplImage* dilateImage);
+		    void erodeImage(IplImage* binary,IplImage* dilateImage);
+	};
 }
-
-
-const   char *FILE_NAME = "lena.bmp";
-const   unsigned char *inBuf;
-unsigned char *grayBuf; 
-
-
-const   int MAX_NAME = 512;
-char    fileName[MAX_NAME]; 
-int     imageX, imageY; 
-
-Image::Bmp bmp; 
 
 int main(int argc, char** argv) {
 	
+	const   char *FILE_NAME = "lena.bmp";
+	const   unsigned char *inBuf;
+	unsigned char *grayBuf; 
+	
+	
+	const   int MAX_NAME = 512;
+	char    fileName[MAX_NAME]; 
+	int     imageX, imageY; 
+	
+	Image::Bmp bmp; 
+
     // use default image file if not specified
     if(argc == 2)
     {
@@ -141,9 +160,31 @@ int main(int argc, char** argv) {
 		}
 	}
 	
+	IplImage* grayImage=0;
+	IplImage* binary;
+	IplImage* imageDilate;
+	IplImage* imageErode;
+		
+	grayImage=cvCreateImage(cvSize(imageX,imageY),8,1);
+	binary=cvCreateImage(cvSize(imageX,imageY),8,1);
+	imageDilate=cvCreateImage(cvSize(imageX,imageY),8,1);
+	imageErode=cvCreateImage(cvSize(imageX,imageY),8,1);
+	
+	Image::improcessImage input;
+	
+	input.grayScale(img,grayImage);
+	input.binaryImage(img,binary,100);
+	input.dilateImage(binary,imageDilate);
+	input.erodeImage(binary,imageErode);
+	
 	cout<<"\nsuccessed\n";
 	  
 	cvShowImage("helloWorld",img);
+	cvShowImage("gray image",grayImage);
+	cvShowImage("bianry image",binary);
+	cvShowImage("dilate image",imageDilate);
+	cvShowImage("Erode image",imageErode);
+		
 	cvWaitKey(0);
 	
 	return 0;
@@ -439,8 +480,6 @@ bool Bmp::read(const char* fileName)
 
     return true;
 }
-
-
 
 ///////////////////////////////////////////////////////////////////////////////
 // save an image as an uncompressed BMP format
@@ -763,4 +802,117 @@ void Bmp::buildGrayScalePalette(unsigned char* palette, int paletteSize)
     }
 }
 
+improcessImage::improcessImage()
+{
+	img=0;
+}
 
+improcessImage::improcessImage(IplImage* image)
+{
+	img=image;
+}
+
+void improcessImage::grayScale(IplImage* image, IplImage* grayImage)
+{
+	for(int i=0; i< image->height ; i++)
+	{
+		for(int j=0; j< image->width ; j++)
+		{
+				((uchar *)(grayImage->imageData + i*grayImage->widthStep))[j*grayImage->nChannels + 0]=
+				       0.114*((uchar *)(image->imageData + i*image->widthStep))[j*image->nChannels + 0]+
+				       0.587*((uchar *)(image->imageData + i*image->widthStep))[j*image->nChannels + 1]+
+				       0.299*((uchar *)(image->imageData + i*image->widthStep))[j*image->nChannels + 2];
+		}
+	}
+}
+
+void improcessImage::binaryImage(IplImage* image,IplImage* binary, int nguong)
+{
+	IplImage* grayImage=cvCreateImage(cvSize(image->width,image->height),8,1);
+	
+	for(int i=0; i< image->height ; i++)
+	{
+		for(int j=0; j< image->width ; j++)
+		{
+				((uchar *)(grayImage->imageData + i*grayImage->widthStep))[j*grayImage->nChannels + 0]=
+				       0.114*((uchar *)(image->imageData + i*image->widthStep))[j*image->nChannels + 0]+
+				       0.587*((uchar *)(image->imageData + i*image->widthStep))[j*image->nChannels + 1]+
+				       0.299*((uchar *)(image->imageData + i*image->widthStep))[j*image->nChannels + 2];
+		}
+	}
+	
+	for(int i=0; i< image->height; i++ )
+	{
+		for(int j=0; j< image->width ; j++)
+		{
+			if( 	((uchar *)(grayImage->imageData + i*grayImage->widthStep))[j*grayImage->nChannels + 0] > nguong )
+			{
+					((uchar *)(binary->imageData + i*binary->widthStep))[j*binary->nChannels + 0]=255;
+			}
+			else
+			{
+					((uchar *)(binary->imageData + i*binary->widthStep))[j*binary->nChannels + 0]=0;
+			}
+		}
+	}
+}
+void improcessImage::dilateImage(IplImage* binary,IplImage* dilateImage)
+{
+	for(int i=0; i< binary->height ; i++)
+	{
+		for(int j=0; j<binary->width ; j++)
+		{
+			((uchar *)(dilateImage->imageData + (i)*dilateImage->widthStep))[(j)*dilateImage->nChannels + 0]=0;
+		}
+	}
+	
+	for(int i=0; i< binary->height ; i++)
+	{
+		for(int j=0; j<binary->width ; j++)
+		{
+			if( ((uchar *)(binary->imageData + i*binary->widthStep))[j*binary->nChannels + 0]==255 )
+			{
+				((uchar *)(dilateImage->imageData + (i)*dilateImage->widthStep))[(j)*dilateImage->nChannels + 0]=255;
+				((uchar *)(dilateImage->imageData + (i-1)*dilateImage->widthStep))[(j-1)*dilateImage->nChannels + 0]=255;
+				((uchar *)(dilateImage->imageData + (i-1)*dilateImage->widthStep))[j*dilateImage->nChannels + 0]=255;
+				((uchar *)(dilateImage->imageData + (i-1)*dilateImage->widthStep))[(j+1)*dilateImage->nChannels + 0]=255;
+				((uchar *)(dilateImage->imageData + i*dilateImage->widthStep))[(j-1)*dilateImage->nChannels + 0]=255;
+				((uchar *)(dilateImage->imageData + i*dilateImage->widthStep))[(j+1)*dilateImage->nChannels + 0]=255;
+				((uchar *)(dilateImage->imageData + (i+1)*dilateImage->widthStep))[(j-1)*dilateImage->nChannels + 0]=255;
+				((uchar *)(dilateImage->imageData + (i+1)*dilateImage->widthStep))[j*dilateImage->nChannels + 0]=255;
+				((uchar *)(dilateImage->imageData + (i+1)*dilateImage->widthStep))[(j+1)*dilateImage->nChannels + 0]=255;
+			}
+		}
+	}
+}
+void improcessImage::erodeImage(IplImage* binary,IplImage* dilateImage)
+{
+	for(int i=0; i< binary->height ; i++)
+	{
+		for(int j=0; j<binary->width ; j++)
+		{
+			((uchar *)(dilateImage->imageData + (i)*dilateImage->widthStep))[(j)*dilateImage->nChannels + 0]=0;
+		}
+	}
+	
+	for(int i=0; i< binary->height ; i++)
+	{
+		for(int j=0; j<binary->width ; j++)
+		{
+			if( 
+				((uchar *)(binary->imageData + (i)*binary->widthStep))[(j)*binary->nChannels + 0]==255 &&
+				((uchar *)(binary->imageData + (i-1)*binary->widthStep))[(j-1)*binary->nChannels + 0]==255 &&
+				((uchar *)(binary->imageData + (i-1)*binary->widthStep))[j*binary->nChannels + 0]==255 &&
+				((uchar *)(binary->imageData + (i-1)*binary->widthStep))[(j+1)*binary->nChannels + 0]==255 &&
+				((uchar *)(binary->imageData + i*binary->widthStep))[(j-1)*binary->nChannels + 0]==255 &&
+				((uchar *)(binary->imageData + i*binary->widthStep))[(j+1)*binary->nChannels + 0]==255 &&
+				((uchar *)(binary->imageData + (i+1)*binary->widthStep))[(j-1)*binary->nChannels + 0]==255 &&
+				((uchar *)(binary->imageData + (i+1)*binary->widthStep))[j*binary->nChannels + 0]==255 &&
+				((uchar *)(binary->imageData + (i+1)*binary->widthStep))[(j+1)*binary->nChannels + 0]==255
+			)
+			{
+				((uchar *)(dilateImage->imageData + (i)*dilateImage->widthStep))[(j)*dilateImage->nChannels + 0]=255;
+			}
+		}
+	}
+}
