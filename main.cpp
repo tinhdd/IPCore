@@ -1,15 +1,18 @@
 #include <iostream>
 #include<highgui.h>
+#include<cv.h>
 #include <string>
 #include <fstream>
 #include <iostream>
 #include <cstring>  
 #include <string>
+#include"conio.h"
 
 using namespace std;
 using namespace cv;
 
 #define IMAGE_BMP_H
+#define dataImage(img, x, y) ((uchar*)(img)->imageData)[(y) * (img)->widthStep + (x) * (img)->nChannels]
 
 namespace Image
 {
@@ -40,7 +43,8 @@ namespace Image
 
         void printSelf() const;                     // print itself for debug purpose
         const char* getError() const;               // return last error message
-
+        IplImage* loadImage(const char *FILE_NAME);
+        
     protected:
 
 
@@ -64,8 +68,6 @@ namespace Image
         unsigned char *dataRGB;                     // extra copy of image data with RGB order
         std::string errorMessage;
     };
-
-
 
     ///////////////////////////////////////////////////////////////////////////
     // inline functions
@@ -93,6 +95,11 @@ namespace Image
 	class improcessImage{
 		private:
 			IplImage* img;
+			void langgieng(IplImage *img, int x, int y, int A[]);
+			int dem(int A[]);
+			int SoGiaoXR(int A[]);
+			int ketnoi(int A[]);
+	  
 		public:
 			improcessImage();
 			improcessImage(IplImage* image);
@@ -100,92 +107,118 @@ namespace Image
 		    void binaryImage(IplImage* image,IplImage* binary,int nguong);
 		    void dilateImage(IplImage* binary,IplImage* dilateImage);
 		    void erodeImage(IplImage* binary,IplImage* dilateImage);
+		    void Stentiford(IplImage *img);
+		    void openImage(IplImage* binary);
+		    void closeImage(IplImage* binary);
 	};
 }
 
 int main(int argc, char** argv) {
 	
 	const   char *FILE_NAME = "lena.bmp";
-	const   unsigned char *inBuf;
-	unsigned char *grayBuf; 
-	
-	
-	const   int MAX_NAME = 512;
-	char    fileName[MAX_NAME]; 
-	int     imageX, imageY; 
-	
-	Image::Bmp bmp; 
+	char c=0;
+        
+	cout<<"\n 0. Load image\n";
+	cout<<" 1. Convert RGB to gray\n";
+	cout<<" 2. Convert RGB to binary\n";
+	cout<<" 3. Dilate algorithm\n";
+	cout<<" 4. Erode algorithm\n";
+	cout<<" 5. Thining algorithm\n";
+	cout<<" 6. open image algorithm\n";
+	cout<<" 7. close image algorithm\n";
+	cout<<" 8. exit\n";
+	cout<<"\n Chu y: Bam X anh hien thi de tro ve menu\n";
 
-    // use default image file if not specified
-    if(argc == 2)
-    {
-        strcpy(fileName, argv[1]);
-    }
-    else{
-        strcpy(fileName, FILE_NAME);
-        cout << "\nUse default image \"" << fileName << "\"" << endl;
-    }
+	cout<<"\n Moi nhap cac so theo chuc nang tren: ";
 
-    // load BMP image
-    if(!bmp.read(fileName))
-        return 0;     // exit if failed load image
-
-    // copy bmp infos
-    imageX = bmp.getWidth();
-    imageY = bmp.getHeight();
-    inBuf  = bmp.getDataRGB();
-    
-    cout<<"\nchieu rong="<<imageX<<"\n";
-    cout<<"\nchieu dai="<<imageY<<"\n";
-    
-    IplImage* img;
-	img=cvCreateImage(cvSize(imageX,imageY),8,3);
-	
-	uchar* data    = (uchar *)img->imageData;
-	
-	int height=img->height;
-	int width= img->width ;
-	
-	int k=0;
-	
-	for(int i=0; i<height ; i++)
+	while( c!='8')
 	{
-		for(int j=0; j<width ; j++)
+		c=getch();
+		//cout<<"\n"<<c;
+
+		Image::Bmp bmp; 
+
+		// load BMP image
+		if(!bmp.read(FILE_NAME))
+			return 0;     // exit if failed load image
+    
+		IplImage* img;
+
+		img=bmp.loadImage(FILE_NAME);
+	
+		int     imageX, imageY; 
+		imageX=img->width;
+		imageY=img->height;
+	
+		IplImage* grayImage=0;
+		IplImage* binary;
+		IplImage* imageDilate;
+		IplImage* imageErode;
+		IplImage* thiningImage;
+	
+		IplImage* imageOpen;
+		IplImage* imageClose;
+		
+		grayImage=cvCreateImage(cvSize(imageX,imageY),8,1);
+		binary=cvCreateImage(cvSize(imageX,imageY),8,1);
+		imageDilate=cvCreateImage(cvSize(imageX,imageY),8,1);
+		imageErode=cvCreateImage(cvSize(imageX,imageY),8,1);
+		thiningImage=cvCreateImage(cvSize(imageX,imageY),8,1);
+	
+		imageOpen=cvCreateImage(cvSize(imageX,imageY),8,1);
+		imageClose=cvCreateImage(cvSize(imageX,imageY),8,1);
+	
+		Image::improcessImage input;
+	
+		input.grayScale(img,grayImage);
+		input.binaryImage(img,binary,100);
+	
+		cvCopyImage(binary,thiningImage);
+		cvCopyImage(binary,imageOpen);
+		cvCopyImage(binary,imageClose);
+	    
+		if( c=='0') cvShowImage("helloWorld",img);
+		if( c=='1') cvShowImage("gray image",grayImage);
+		if( c=='2') cvShowImage("bianry image",binary);
+	
+		if( c=='3' ) 
 		{
-			((uchar *)(img->imageData + i*img->widthStep))[j*img->nChannels + 0]=(unsigned char)inBuf[k+2];
-			((uchar *)(img->imageData + i*img->widthStep))[j*img->nChannels + 1]=(unsigned char)inBuf[k+1];
-			((uchar *)(img->imageData + i*img->widthStep))[j*img->nChannels + 2]=(unsigned char)inBuf[k+0];
-			
-			k=k+3;
+			input.dilateImage(binary,imageDilate);
+			cvShowImage("bianry image",binary);
+			cvShowImage("dilate image",imageDilate);
 		}
+
+		if( c=='4' ) 
+		{
+			input.erodeImage(binary,imageErode);
+			cvShowImage("bianry image",binary);
+			cvShowImage("erode image",imageErode);
+		}
+
+		if( c=='5' )
+		{
+			input.Stentiford(thiningImage);
+			cvShowImage("bianry image",binary);
+			cvShowImage("thinning image",thiningImage);
+		}
+
+		if( c=='6' )
+		{
+			input.openImage(imageOpen);
+			cvShowImage("bianry image",binary);
+			cvShowImage("open image",imageOpen);
+		}
+
+		if( c=='7' )
+		{
+			input.closeImage(imageClose);
+			cvShowImage("bianry image",binary);
+			cvShowImage("close image",imageClose);
+		}
+
+		cout<<"\n Successed\n"; 
+		cvWaitKey(0);
 	}
-	
-	IplImage* grayImage=0;
-	IplImage* binary;
-	IplImage* imageDilate;
-	IplImage* imageErode;
-		
-	grayImage=cvCreateImage(cvSize(imageX,imageY),8,1);
-	binary=cvCreateImage(cvSize(imageX,imageY),8,1);
-	imageDilate=cvCreateImage(cvSize(imageX,imageY),8,1);
-	imageErode=cvCreateImage(cvSize(imageX,imageY),8,1);
-	
-	Image::improcessImage input;
-	
-	input.grayScale(img,grayImage);
-	input.binaryImage(img,binary,100);
-	input.dilateImage(binary,imageDilate);
-	input.erodeImage(binary,imageErode);
-	
-	cout<<"\nsuccessed\n";
-	  
-	cvShowImage("helloWorld",img);
-	cvShowImage("gray image",grayImage);
-	cvShowImage("bianry image",binary);
-	cvShowImage("dilate image",imageDilate);
-	cvShowImage("Erode image",imageErode);
-		
-	cvWaitKey(0);
 	
 	return 0;
 }
@@ -199,7 +232,6 @@ Bmp::Bmp() : width(0), height(0), bitCount(0), dataSize(0), data(0), dataRGB(0),
              errorMessage("No error.")
 {
 }
-
 
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -782,7 +814,32 @@ int Bmp::getColorCount(const unsigned char* data, int dataSize)
     return colorCount;
 }
 
+// when read image file.bmp, type data image unsigned char . we want to display image, we need graphic ,
+/// I using funtion cvShowImage with iplImage variable.
 
+IplImage* Bmp::loadImage(const char* FILE_NAME)
+{
+	int w=this->width;
+	int h=this->width;
+	
+	IplImage* img;
+	img=cvCreateImage(cvSize(w,h),8,3);
+
+	int k=0;
+	for(int i=0; i<h ; i++)
+	{
+		for(int j=0; j<w ; j++)
+		{
+			((uchar *)(img->imageData + i*img->widthStep))[j*img->nChannels + 0]=(unsigned char)(this->dataRGB[k+2]);
+			((uchar *)(img->imageData + i*img->widthStep))[j*img->nChannels + 1]=(unsigned char)(this->dataRGB[k+1]);
+			((uchar *)(img->imageData + i*img->widthStep))[j*img->nChannels + 2]=(unsigned char)(this->dataRGB[k+0]);
+			
+			k=k+3;
+		}
+	}
+
+	return img;
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // build palette for 8-bit grayscale image
@@ -916,3 +973,166 @@ void improcessImage::erodeImage(IplImage* binary,IplImage* dilateImage)
 		}
 	}
 }
+
+void improcessImage::langgieng(IplImage *img, int x, int y, int A[])
+{
+	A[1] = dataImage(img, x + 1, y);
+	A[2] = dataImage(img, x + 1, y + 1);
+	A[3] = dataImage(img, x, y + 1);
+	A[4] = dataImage(img, x - 1, y + 1);
+	A[5] = dataImage(img, x - 1, y);
+	A[6] = dataImage(img, x - 1, y - 1);
+	A[7] = dataImage(img, x, y - 1);
+	A[8] = dataImage(img, x + 1, y - 1);
+}
+
+int improcessImage::dem(int A[])
+{
+	int tong = 0;
+	for(int i = 1; i <= 8; i++)
+		if(A[i] != 0) ++tong;
+	return tong;
+}
+
+int improcessImage::ketnoi(int A[])
+{
+	int kq = 0;
+	int a[9];
+	for(int k = 1; k <= 8; k++)
+	{
+		if(A[k] == 255) a[k] = 1;
+		else a[k] = 0;
+	}
+	kq += a[1] - a[1] * a[2] * a[3];
+	kq += a[3] - a[3] * a[4] * a[5];
+	kq += a[5] - a[5] * a[6] * a[7];
+	kq += a[7] - a[7] * a[8] * a[1];
+	return kq;
+}
+
+void improcessImage::Stentiford(IplImage *img)
+{
+	int tieptuc = 1;
+	int delpixel;
+	int x, y;
+	IplImage *copy = cvCreateImage(cvGetSize(img), img->depth, img->nChannels);
+	cvCopyImage(img, copy);
+	int A[9];
+	int tong;
+	while(tieptuc == 1)
+	{
+		// Case 1:
+		delpixel = 0;
+		for( y = 1; y < img->height - 1; y++)
+			for( x = 1; x < img->width - 1; x++)
+			{
+				langgieng(img, x, y, A);
+				if(dataImage(img, x, y) == 255 && dataImage(img, x, y + 1) == 0 && dataImage(img, x, y - 1) == 255)
+				{
+					if(dem(A) > 1 && ketnoi(A) == 1)
+					{
+						//cout<<"case 1\n";
+						dataImage(copy, x, y) = 0;
+						delpixel = 1;
+					}
+				}
+			}
+
+		// Case 2:
+		cvCopyImage(copy, img);
+		//////////////////
+		for( y = 1; y < img->height - 1; y++)
+			for( x = 1; x < img->width - 1; x++)
+			{
+				langgieng(img, x, y, A);
+				if(dataImage(img, x, y) == 255 && dataImage(img, x - 1, y) == 0 && dataImage(img, x + 1, y) == 255)
+				{
+					if(dem(A) > 1 && ketnoi(A) == 1)
+					{
+						//cout<<"case 2\n";
+						dataImage(copy, x, y) = 0;
+						delpixel = 1;
+					}
+				}
+			}
+
+		 // Case 3:
+		cvCopyImage(copy, img);
+		////////////////
+		for( y = 1; y < img->height - 1; y++)
+			for( x = 1; x < img->width - 1; x++)
+			{
+				langgieng(img, x, y, A);
+				if(dataImage(img, x, y) == 255 && dataImage(img, x, y + 1) == 255 && dataImage(img, x, y - 1) == 0)
+				{
+					if(dem(A) > 1 && ketnoi(A) == 1)
+					{
+						//cout<<"case 3\n";
+						dataImage(copy, x, y) = 0;
+						delpixel = 1;
+					}
+				}
+
+			}
+
+		// Case 4:
+		cvCopyImage(copy, img);
+		////////////////////
+		for( y = 1; y < img->height - 1; y++)
+			for( x = 1; x < img->width - 1; x++)
+			{
+				langgieng(img, x, y, A);
+				if(dataImage(img, x, y) == 255 && dataImage(img, x - 1, y) == 255 && dataImage(img, x + 1, y) == 0)
+				{
+					if(dem(A) > 1 && ketnoi(A) == 1)
+					{
+						//cout<<"case 4\n";
+						dataImage(copy, x, y) = 0;
+						delpixel = 1;
+					}
+				}
+
+			}
+		cvCopyImage(copy, img);
+		if(delpixel == 1) tieptuc = 1;
+		else tieptuc = 0;
+	}
+}
+
+void improcessImage::openImage(IplImage* binary)
+{
+    IplImage* result;
+	result=cvCreateImage(cvSize(binary->width,binary->height),8,1);
+	
+	IplImage* result1;
+	result1 =cvCreateImage(cvSize(binary->width,binary->height),8,1);
+	
+	Image::improcessImage *input;
+    input = new improcessImage();
+    
+	input->dilateImage(binary,result);
+	input->erodeImage(result,result1);
+	cvCopyImage(result1,binary);
+	
+	delete input;
+}
+
+void improcessImage::closeImage(IplImage* binary)
+{
+    IplImage* result;
+	result=cvCreateImage(cvSize(binary->width,binary->height),8,1);
+	
+	IplImage* result1;
+	result1 =cvCreateImage(cvSize(binary->width,binary->height),8,1);
+	
+	Image::improcessImage *input;
+    input=new improcessImage();
+    
+	input->erodeImage(binary,result);
+	input->dilateImage(result,result1);
+	cvCopyImage(result1,binary);
+	
+	delete input;
+}
+
+
