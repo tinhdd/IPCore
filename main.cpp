@@ -7,6 +7,8 @@
 #include <cstring>  
 #include <string>
 #include"conio.h"
+#include <vector>
+#include <stack>
 
 using namespace std;
 using namespace cv;
@@ -94,6 +96,7 @@ namespace Image
 	
 	class improcessImage{
 		private:
+			const double color_radius = 6.5;
 			IplImage* img;
 			void langgieng(IplImage *img, int x, int y, int A[]);
 			int dem(int A[]);
@@ -110,10 +113,39 @@ namespace Image
 		    void Stentiford(IplImage *img);
 		    void openImage(IplImage* binary);
 		    void closeImage(IplImage* binary);
+		    inline int color_distance( const IplImage* img, int x1, int y1, int x2, int y2 );
+		    int ECC(const IplImage* img, int **labels);
 	};
 }
 
 int main(int argc, char** argv) {
+	
+	/*Image::improcessImage input;
+	
+	IplImage *img = cvLoadImage("C:\\thinning.bmp");
+
+	cvShowImage(" original image",img);
+
+	// Mean shift
+	int **ilabels = new int *[img->height];
+	for(int i=0;i<img->height;i++) ilabels[i] = new int [img->width];
+	int regionCount = input.ECC(img, ilabels);
+	vector<int> color(regionCount);
+	CvRNG rng= cvRNG(cvGetTickCount());
+	for(int i=0;i<regionCount;i++)
+		color[i] = cvRandInt(&rng);
+
+	// Draw random color
+	for(int i=0;i<img->height;i++)
+		for(int j=0;j<img->width;j++)
+		{ 
+			int cl = ilabels[i][j];
+			((uchar *)(img->imageData + i*img->widthStep))[j*img->nChannels + 0] = (color[cl])&255;
+			((uchar *)(img->imageData + i*img->widthStep))[j*img->nChannels + 1] = (color[cl]>>8)&255;
+			((uchar *)(img->imageData + i*img->widthStep))[j*img->nChannels + 2] = (color[cl]>>16)&255;
+		}
+	cvShowImage("MeanShift",img);
+	cvReleaseImage(&img);*/
 	
 	const   char *FILE_NAME = "lena.bmp";
 	char c=0;
@@ -126,12 +158,13 @@ int main(int argc, char** argv) {
 	cout<<" 5. Thining algorithm\n";
 	cout<<" 6. open image algorithm\n";
 	cout<<" 7. close image algorithm\n";
-	cout<<" 8. exit\n";
+	cout<<" 8. Extracting conected components and Region fill algorithm";
+	cout<<" 9. exit\n";
 	cout<<"\n Chu y: Bam X anh hien thi de tro ve menu\n";
 
 	cout<<"\n Moi nhap cac so theo chuc nang tren: ";
 
-	while( c!='8')
+	while( c!='9')
 	{
 		c=getch();
 		//cout<<"\n"<<c;
@@ -142,13 +175,13 @@ int main(int argc, char** argv) {
 		if(!bmp.read(FILE_NAME))
 			return 0;     // exit if failed load image
     
-		IplImage* img;
+		IplImage* image;
 
-		img=bmp.loadImage(FILE_NAME);
+		image=bmp.loadImage(FILE_NAME);
 	
 		int     imageX, imageY; 
-		imageX=img->width;
-		imageY=img->height;
+		imageX=image->width;
+		imageY=image->height;
 	
 		IplImage* grayImage=0;
 		IplImage* binary;
@@ -158,6 +191,7 @@ int main(int argc, char** argv) {
 	
 		IplImage* imageOpen;
 		IplImage* imageClose;
+		IplImage* imageECC;
 		
 		grayImage=cvCreateImage(cvSize(imageX,imageY),8,1);
 		binary=cvCreateImage(cvSize(imageX,imageY),8,1);
@@ -167,17 +201,19 @@ int main(int argc, char** argv) {
 	
 		imageOpen=cvCreateImage(cvSize(imageX,imageY),8,1);
 		imageClose=cvCreateImage(cvSize(imageX,imageY),8,1);
+		imageECC=cvCreateImage(cvSize(imageX,imageY),8,1);
 	
 		Image::improcessImage input;
 	
-		input.grayScale(img,grayImage);
-		input.binaryImage(img,binary,100);
+		input.grayScale(image,grayImage);
+		input.binaryImage(image,binary,100);
 	
 		cvCopyImage(binary,thiningImage);
 		cvCopyImage(binary,imageOpen);
 		cvCopyImage(binary,imageClose);
+		cvCopyImage(binary,imageECC);
 	    
-		if( c=='0') cvShowImage("helloWorld",img);
+		if( c=='0') cvShowImage("helloWorld",image);
 		if( c=='1') cvShowImage("gray image",grayImage);
 		if( c=='2') cvShowImage("bianry image",binary);
 	
@@ -215,9 +251,47 @@ int main(int argc, char** argv) {
 			cvShowImage("bianry image",binary);
 			cvShowImage("close image",imageClose);
 		}
-
+        
+        if( c=='8')
+        {
+        	IplImage* img;
+        	
+        	img = cvCreateImage(cvSize(imageX,imageY),8,3);
+        	cvCvtColor(imageECC,img,CV_GRAY2BGR);
+        	
+			// Mean shift
+			int **ilabels = new int *[img->height];
+			for(int i=0;i<img->height;i++) ilabels[i] = new int [img->width];
+			int regionCount = input.ECC(img, ilabels);
+			vector<int> color(regionCount);
+			CvRNG rng= cvRNG(cvGetTickCount());
+			for(int i=0;i<regionCount;i++)
+				color[i] = cvRandInt(&rng);
+		
+			// Draw random color
+			for(int i=0;i<img->height;i++)
+				for(int j=0;j<img->width;j++)
+				{ 
+					int cl = ilabels[i][j];
+					((uchar *)(img->imageData + i*img->widthStep))[j*img->nChannels + 0] = (color[cl])&255;
+					((uchar *)(img->imageData + i*img->widthStep))[j*img->nChannels + 1] = (color[cl]>>8)&255;
+					((uchar *)(img->imageData + i*img->widthStep))[j*img->nChannels + 2] = (color[cl]>>16)&255;
+				}
+			cvShowImage("MeanShift",img);
+        }
+        
 		cout<<"\n Successed\n"; 
 		cvWaitKey(0);
+		
+		cvReleaseImage(&image);
+		cvReleaseImage(&grayImage);
+		cvReleaseImage(&binary);
+		cvReleaseImage(&imageDilate);
+		cvReleaseImage(&imageErode);
+		cvReleaseImage(&thiningImage);
+		cvReleaseImage(&imageOpen);
+		cvReleaseImage(&imageClose);
+		cvReleaseImage(&imageECC);
 	}
 	
 	return 0;
@@ -1135,4 +1209,66 @@ void improcessImage::closeImage(IplImage* binary)
 	delete input;
 }
 
+inline int improcessImage::color_distance( const IplImage* img, int x1, int y1, int x2, int y2 ) 
+{
+	int r = ((uchar *)(img->imageData + x1*img->widthStep))[y1*img->nChannels + 0]
+	- ((uchar *)(img->imageData + x2*img->widthStep))[y2*img->nChannels + 0];
+	return r*r;
+}
 
+int improcessImage::ECC(const IplImage* img, int **labels)
+{
+	int level = 1;
+	double color_radius2=color_radius*color_radius;
+	int minRegion = 50;
+
+	// use Lab rather than L*u*v!
+	// since Luv may produce noise points
+	IplImage *result = cvCreateImage(cvGetSize(img),img->depth,1);
+	cvCvtColor(img, result, CV_BGR2GRAY); 
+
+	// Step Two. Cluster
+	// Connect
+	int regionCount = 0;
+	float *mode = new float[img->height*img->width*3];
+	{
+		int label = -1;
+		for(int i=0;i<img->height;i++) 
+			for(int j=0;j<img->width;j++)
+				labels[i][j] = -1;
+		for(int i=0;i<img->height;i++) 
+			for(int j=0;j<img->width;j++)
+				if(labels[i][j]<0)
+				{
+					labels[i][j] = ++label;
+
+					// Fill
+					std::stack<CvPoint> neighStack;
+					neighStack.push(cvPoint(i,j));
+					const int dxdy[][2] = {{-1,-1},{-1,0},{-1,1},{0,-1},{0,1},{1,-1},{1,0},{1,1}};
+					while(!neighStack.empty())
+					{
+						CvPoint p = neighStack.top();
+						neighStack.pop();
+						for(int k=0;k<8;k++)
+						{
+							int i2 = p.x+dxdy[k][0], j2 = p.y+dxdy[k][1];
+							if(i2>=0 && j2>=0 && i2<img->height && j2<img->width && labels[i2][j2]<0 && color_distance(result, i,j,i2,j2)<color_radius2)
+							{
+								labels[i2][j2] = label;
+								neighStack.push(cvPoint(i2,j2));
+							}
+						}
+					}
+				}
+				//current Region count
+				regionCount = label+1;
+	}	
+
+	std::cout<<"Mean Shift(Connect):"<<regionCount<<std::endl;
+	int oldRegionCount = regionCount;
+
+	cvReleaseImage(&result);
+	delete []mode;
+	return regionCount;
+}
