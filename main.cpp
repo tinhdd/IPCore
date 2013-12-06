@@ -13,6 +13,11 @@
 using namespace std;
 using namespace cv;
 
+#define pi 3.141529
+int GaussianKernel[15][15];
+int KernelWeight=0 ;
+float Sigma = 1;
+
 #define IMAGE_BMP_H
 #define dataImage(img, x, y) ((uchar*)(img)->imageData)[(y) * (img)->widthStep + (x) * (img)->nChannels]
 
@@ -102,10 +107,27 @@ namespace Image
 			int dem(int A[]);
 			int SoGiaoXR(int A[]);
 			int ketnoi(int A[]);
+			
+			int				noOfCordinates;		//Number of elements in coordinate array
+			CvPoint			*cordinates;		//Coordinates array to store model points	
+			int				modelHeight;		//Template height
+			int				modelWidth;			//Template width
+			double			*edgeMagnitude;		//gradient magnitude
+			double			*edgeDerivativeX;	//gradient in X direction
+			double			*edgeDerivativeY;	//radient in Y direction	
+			CvPoint			centerOfGravity;	//Center of gravity of template 
+	
+			bool			modelDefined;
+	
+			void CreateDoubleMatrix(double **&matrix,CvSize size);
+			void ReleaseDoubleMatrix(double **&matrix,int size);
 	  
 		public:
-			improcessImage();
+			improcessImage(void);
+			~improcessImage(void);
 			improcessImage(IplImage* image);
+			improcessImage(const void* templateArr);
+			
 		    void grayScale(IplImage* image, IplImage* grayImage);
 		    void binaryImage(IplImage* image,IplImage* binary,int nguong);
 		    void dilateImage(IplImage* binary,IplImage* dilateImage);
@@ -115,8 +137,17 @@ namespace Image
 		    void closeImage(IplImage* binary);
 		    inline int color_distance( const IplImage* img, int x1, int y1, int x2, int y2 );
 		    int ECC(const IplImage* img, int **labels);
+		    
+		    int CreateGeoMatchModel(const void* templateArr,double,double);
+			double FindGeoMatchModel(const void* srcarr,double minScore,double greediness, CvPoint *resultPoint);
+			void DrawContours(IplImage* pImage,CvPoint COG,CvScalar,int);
+			void DrawContours(IplImage* pImage,CvScalar,int);
 	};
 }
+
+void GenerateGaussianKernel(int N ,int &Weight );
+void GaussianFilter( IplImage* gray,IplImage* out ,int KernelSize);
+
 
 int main(int argc, char** argv) {
 	
@@ -158,13 +189,15 @@ int main(int argc, char** argv) {
 	cout<<" 5. Thining algorithm\n";
 	cout<<" 6. open image algorithm\n";
 	cout<<" 7. close image algorithm\n";
-	cout<<" 8. Extracting conected components and Region fill algorithm";
-	cout<<" 9. exit\n";
+	cout<<" 8. Extracting conected components and Region fill algorithm\n";
+	cout<<" 9. Canny algorithm\n";
+	
+	cout<<" 0. exit\n";
 	cout<<"\n Chu y: Bam X anh hien thi de tro ve menu\n";
 
 	cout<<"\n Moi nhap cac so theo chuc nang tren: ";
 
-	while( c!='9')
+	while( c!='0')
 	{
 		c=getch();
 		//cout<<"\n"<<c;
@@ -278,6 +311,29 @@ int main(int argc, char** argv) {
 					((uchar *)(img->imageData + i*img->widthStep))[j*img->nChannels + 2] = (color[cl]>>16)&255;
 				}
 			cvShowImage("MeanShift",img);
+        }
+        
+        if( c=='9')
+        {
+        	IplImage* out =cvCreateImage( cvGetSize(grayImage) ,8,1 );
+			IplImage* canny =cvCreateImage( cvGetSize(grayImage) ,8,1 );
+			cvZero(canny);
+
+			GaussianFilter(grayImage,out,5);
+
+			Image::improcessImage GM;
+
+			int lowThreshold = 10;		
+			int highThreashold = 100;	
+			double minScore=0.7;		
+			double greediness=0.8;		
+			double score= 0;
+			CvPoint result;
+
+			GM.CreateGeoMatchModel(out,lowThreshold,highThreashold);
+			GM.DrawContours(canny,CV_RGB( 255, 255, 255 ),1);
+
+			cvShowImage("out",canny);
         }
         
 		cout<<"\n Successed\n"; 
@@ -936,6 +992,16 @@ void Bmp::buildGrayScalePalette(unsigned char* palette, int paletteSize)
 improcessImage::improcessImage()
 {
 	img=0;
+	noOfCordinates = 0;  // Initilize  no of cppodinates in model points
+	modelDefined = false; 
+}
+
+improcessImage::~improcessImage(void)
+{
+	delete[] cordinates ;
+	delete[] edgeMagnitude;
+	delete[] edgeDerivativeX;
+	delete[] edgeDerivativeY;
 }
 
 improcessImage::improcessImage(IplImage* image)
@@ -1271,4 +1337,324 @@ int improcessImage::ECC(const IplImage* img, int **labels)
 	cvReleaseImage(&result);
 	delete []mode;
 	return regionCount;
+}
+
+int improcessImage::CreateGeoMatchModel(const void *templateArr,double maxContrast,double minContrast)
+{
+	CvMat *gx = 0;		//Matrix to store X derivative
+	CvMat *gy = 0;		//Matrix to store Y derivative
+	CvMat *nmsEdges = 0;		//Matrix to store temp restult
+	CvSize Ssize;
+		
+	// Convert IplImage to Matrix for integer operations
+	CvMat srcstub, *src = (CvMat*)templateArr;
+	src = cvGetMat( src, &srcstub );
+	if(CV_MAT_TYPE( src->type ) != CV_8UC1)
+	{	
+		return 0;
+	}
+	
+	// set width and height
+	Ssize.width =  src->width;
+	Ssize.height= src->height;
+	modelHeight =src->height;		//Save Template height
+	modelWidth =src->width;			//Save Template width
+
+	noOfCordinates=0;											//initialize	
+	cordinates =  new CvPoint[ modelWidth *modelHeight];		//Allocate memory for coorinates of selected points in template image
+	
+	edgeMagnitude = new double[ modelWidth *modelHeight];		//Allocate memory for edge magnitude for selected points
+	edgeDerivativeX = new double[modelWidth *modelHeight];			//Allocate memory for edge X derivative for selected points
+	edgeDerivativeY = new double[modelWidth *modelHeight];			////Allocate memory for edge Y derivative for selected points
+
+
+	// Calculate gradient of Template
+	gx = cvCreateMat( Ssize.height, Ssize.width, CV_16SC1 );		//create Matrix to store X derivative
+	gy = cvCreateMat( Ssize.height, Ssize.width, CV_16SC1 );		//create Matrix to store Y derivative
+	cvSobel( src, gx, 1,0, 3 );		//gradient in X direction			
+	cvSobel( src, gy, 0, 1, 3 );	//gradient in Y direction
+	
+	nmsEdges = cvCreateMat( Ssize.height, Ssize.width, CV_32F);		//create Matrix to store Final nmsEdges
+	const short* _sdx; 
+	const short* _sdy; 
+	double fdx,fdy;	
+    double MagG, DirG;
+	double MaxGradient=-99999.99;
+	double direction;
+	int *orients = new int[ Ssize.height *Ssize.width];
+	int count = 0,i,j; // count variable;
+	
+	double **magMat;
+	CreateDoubleMatrix(magMat ,Ssize);
+	
+	for( i = 1; i < Ssize.height-1; i++ )
+    {
+    	for( j = 1; j < Ssize.width-1; j++ )
+        { 		 
+				_sdx = (short*)(gx->data.ptr + gx->step*i);
+				_sdy = (short*)(gy->data.ptr + gy->step*i);
+				fdx = _sdx[j]; fdy = _sdy[j];        // read x, y derivatives
+
+				MagG = sqrt((float)(fdx*fdx) + (float)(fdy*fdy)); //Magnitude = Sqrt(gx^2 +gy^2)
+				direction =cvFastArctan((float)fdy,(float)fdx);	 //Direction = invtan (Gy / Gx)
+				magMat[i][j] = MagG;
+				
+				if(MagG>MaxGradient)
+					MaxGradient=MagG; // get maximum gradient value for normalizing.
+
+				
+					// get closest angle from 0, 45, 90, 135 set
+                        if ( (direction>0 && direction < 22.5) || (direction >157.5 && direction < 202.5) || (direction>337.5 && direction<360)  )
+                            direction = 0;
+                        else if ( (direction>22.5 && direction < 67.5) || (direction >202.5 && direction <247.5)  )
+                            direction = 45;
+                        else if ( (direction >67.5 && direction < 112.5)||(direction>247.5 && direction<292.5) )
+                            direction = 90;
+                        else if ( (direction >112.5 && direction < 157.5)||(direction>292.5 && direction<337.5) )
+                            direction = 135;
+                        else 
+							direction = 0;
+				
+			orients[count] = (int)direction;
+			count++;
+		}
+	}
+	
+	count=0; // init count
+	// non maximum suppression
+	double leftPixel,rightPixel;
+	
+	for( i = 1; i < Ssize.height-1; i++ )
+    {
+		for( j = 1; j < Ssize.width-1; j++ )
+        {
+				switch ( orients[count] )
+                {
+                   case 0:
+                        leftPixel  = magMat[i][j-1];
+                        rightPixel = magMat[i][j+1];
+                        break;
+                    case 45:
+                        leftPixel  = magMat[i-1][j+1];
+						rightPixel = magMat[i+1][j-1];
+                        break;
+                    case 90:
+                        leftPixel  = magMat[i-1][j];
+                        rightPixel = magMat[i+1][j];
+                        break;
+                    case 135:
+                        leftPixel  = magMat[i-1][j-1];
+                        rightPixel = magMat[i+1][j+1];
+                        break;
+				 }
+				// compare current pixels value with adjacent pixels
+                if (( magMat[i][j] < leftPixel ) || (magMat[i][j] < rightPixel ) )
+					(nmsEdges->data.ptr + nmsEdges->step*i)[j]=0;
+                else
+                    (nmsEdges->data.ptr + nmsEdges->step*i)[j]=(uchar)(magMat[i][j]/MaxGradient*255);
+			
+				count++;
+			}
+		}
+	
+	int RSum=0,CSum=0;
+	int curX,curY;
+	int flag=1;
+
+	//Hysterisis threshold
+	for( i = 1; i < Ssize.height-1; i++ )
+    {
+		for( j = 1; j < Ssize.width; j++ )
+        {
+			_sdx = (short*)(gx->data.ptr + gx->step*i);
+			_sdy = (short*)(gy->data.ptr + gy->step*i);
+			fdx = _sdx[j]; fdy = _sdy[j];
+				
+			MagG = sqrt(fdx*fdx + fdy*fdy); //Magnitude = Sqrt(gx^2 +gy^2)
+			DirG =cvFastArctan((float)fdy,(float)fdx);	 //Direction = tan(y/x)
+		
+			////((uchar*)(imgGDir->imageData + imgGDir->widthStep*i))[j]= MagG;
+			flag=1;
+			if(((double)((nmsEdges->data.ptr + nmsEdges->step*i))[j]) < maxContrast)
+			{
+				if(((double)((nmsEdges->data.ptr + nmsEdges->step*i))[j])< minContrast)
+				{
+					
+					(nmsEdges->data.ptr + nmsEdges->step*i)[j]=0;
+					flag=0; // remove from edge
+					////((uchar*)(imgGDir->imageData + imgGDir->widthStep*i))[j]=0;
+				}
+				else
+				{   // if any of 8 neighboring pixel is not greater than max contraxt remove from edge
+					if( (((double)((nmsEdges->data.ptr + nmsEdges->step*(i-1)))[j-1]) < maxContrast)	&&
+						(((double)((nmsEdges->data.ptr + nmsEdges->step*(i-1)))[j]) < maxContrast)		&&
+						(((double)((nmsEdges->data.ptr + nmsEdges->step*(i-1)))[j+1]) < maxContrast)	&&
+						(((double)((nmsEdges->data.ptr + nmsEdges->step*i))[j-1]) < maxContrast)		&&
+						(((double)((nmsEdges->data.ptr + nmsEdges->step*i))[j+1]) < maxContrast)		&&
+						(((double)((nmsEdges->data.ptr + nmsEdges->step*(i+1)))[j-1]) < maxContrast)	&&
+						(((double)((nmsEdges->data.ptr + nmsEdges->step*(i+1)))[j]) < maxContrast)		&&
+						(((double)((nmsEdges->data.ptr + nmsEdges->step*(i+1)))[j+1]) < maxContrast)	)
+					{
+						(nmsEdges->data.ptr + nmsEdges->step*i)[j]=0;
+						flag=0;
+						////((uchar*)(imgGDir->imageData + imgGDir->widthStep*i))[j]=0;
+					}
+				}
+			}
+			
+			// save selected edge information
+			curX=i;	curY=j;
+			if(flag!=0)
+			{
+				if(fdx!=0 || fdy!=0)
+				{		
+					RSum=RSum+curX;	CSum=CSum+curY; // Row sum and column sum for center of gravity
+					
+					cordinates[noOfCordinates].x = curX;
+					cordinates[noOfCordinates].y = curY;
+					edgeDerivativeX[noOfCordinates] = fdx;
+					edgeDerivativeY[noOfCordinates] = fdy;
+					
+					//handle divide by zero
+					if(MagG!=0)
+						edgeMagnitude[noOfCordinates] = 1/MagG;  // gradient magnitude 
+					else
+						edgeMagnitude[noOfCordinates] = 0;
+															
+					noOfCordinates++;
+				}
+			}
+		}
+	}
+
+	centerOfGravity.x = RSum /noOfCordinates; // center of gravity
+	centerOfGravity.y = CSum/noOfCordinates ;	// center of gravity
+		
+	// change coordinates to reflect center of gravity
+	for(int m=0;m<noOfCordinates ;m++)
+	{
+		int temp;
+
+		temp=cordinates[m].x;
+		cordinates[m].x=temp-centerOfGravity.x;
+		temp=cordinates[m].y;
+		cordinates[m].y =temp-centerOfGravity.y;
+	}
+	
+	////cvSaveImage("Edges.bmp",imgGDir);
+	
+	// free alocated memories
+	delete[] orients;
+	////cvReleaseImage(&imgGDir);
+	cvReleaseMat( &gx );
+    cvReleaseMat( &gy );
+	cvReleaseMat(&nmsEdges);
+
+	ReleaseDoubleMatrix(magMat ,Ssize.height);
+	
+	modelDefined=true;
+	return 1;
+}
+
+void improcessImage::CreateDoubleMatrix(double **&matrix,CvSize size)
+{
+	matrix = new double*[size.height];
+	for(int iInd = 0; iInd < size.height; iInd++)
+		matrix[iInd] = new double[size.width];
+}
+
+void improcessImage::ReleaseDoubleMatrix(double **&matrix,int size)
+{
+	for(int iInd = 0; iInd < size; iInd++) 
+        delete[] matrix[iInd]; 
+}
+void GenerateGaussianKernel(int N ,int &Weight )
+{
+	int i ,j ;
+	int SizeofKernel=N;
+	float Kernel[15][15];
+	float D1 ,D2 ;
+
+	D1=1/(2*pi*Sigma*Sigma);
+	D2=2*Sigma*Sigma;
+
+	float min=1000;
+
+	for(i=-SizeofKernel/2 ;i<= SizeofKernel/2 ;i++)
+	{
+		for( int j= -SizeofKernel/2 ; j<= SizeofKernel/2 ;j++)
+		{
+			 Kernel[SizeofKernel / 2 + i][ SizeofKernel / 2 + j] = ( (1 / D1) * (float)exp(-(i * i + j * j) / D2 ) );
+			 if( Kernel[SizeofKernel / 2 + i][ SizeofKernel / 2 + j] < min )
+                        min = Kernel[SizeofKernel / 2 + i][ SizeofKernel / 2 + j];
+
+		}
+	}
+	int mult = (int)(1/min);
+    int sum = 0;
+	if( min>0 && min<1 )
+	{
+		for( i=-SizeofKernel/2 ; i<= SizeofKernel/2 ;i++)
+		{
+			for( j=-SizeofKernel/2 ;j<= SizeofKernel/2 ;j++)
+			{
+				Kernel[SizeofKernel/2+i][SizeofKernel/2+j]=(float)cvRound( Kernel[SizeofKernel/2+i][SizeofKernel/2+j]*mult);
+				GaussianKernel[ SizeofKernel/2+i ][SizeofKernel/2+j]=(int)Kernel[SizeofKernel/2+i][SizeofKernel/2+j];
+				sum=sum+GaussianKernel[SizeofKernel/2+i][SizeofKernel/2+j];
+			}
+		}
+	}
+	else
+	{
+		sum=0 ;
+		for( i=-SizeofKernel/2 ;i<=SizeofKernel/2 ;i++)
+		{
+			for( j=-SizeofKernel/2 ;j<=SizeofKernel/2 ;j++)
+			{
+				Kernel[SizeofKernel/2+i][SizeofKernel/2+j]=(float)cvRound(Kernel[SizeofKernel/2+i][SizeofKernel/2+j]);
+				GaussianKernel[SizeofKernel/2+i][SizeofKernel/2+j]=(int)Kernel[SizeofKernel/2+i][SizeofKernel/2+j];
+				sum=sum+GaussianKernel[SizeofKernel/2+i][SizeofKernel/2+j];
+			}
+		}
+	}
+	Weight=sum;
+}
+
+void GaussianFilter( IplImage* gray,IplImage* out ,int KernelSize)
+{
+	GenerateGaussianKernel(KernelSize ,KernelWeight );
+	uchar* Data=(uchar* )(gray->imageData);
+	uchar* OutData=(uchar* )(out->imageData);
+
+	int i ,j , k ,l ;
+	int Limit=KernelSize/2 ;
+	float sum=0 ;
+	
+	for( i=Limit ; i<= (gray->width-1)-Limit ;i++)
+	{
+		for( int j=Limit ;j<(gray->height-1)-Limit ;j++)
+		{
+			sum=0;
+			for( k= -Limit ;k< Limit ;k++)
+			{
+				for( l=-Limit ;l<=Limit ;l++)
+				{
+					sum=sum + ( (float)Data[(j+k)*gray->widthStep+(i+l)*gray->nChannels]*GaussianKernel[Limit+k][Limit+l]);
+				}
+			}
+			OutData[j*out->widthStep+i*out->nChannels]=(int)cvRound(sum/(float)KernelWeight) ;
+		}
+	}
+}
+
+// draw contour at template image
+void improcessImage::DrawContours(IplImage* source,CvScalar color,int lineWidth)
+{
+	CvPoint point;
+	for(int i=0; i<noOfCordinates; i++)
+	{
+		point.y=cordinates[i].x + centerOfGravity.x;
+		point.x=cordinates[i].y + centerOfGravity.y;
+		cvLine(source,point,point,color,lineWidth);
+	}
 }
