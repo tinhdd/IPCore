@@ -18,6 +18,7 @@ int GaussianKernel[15][15];
 int KernelWeight=0 ;
 float Sigma = 1;
 
+const double color_radius = 6.5;
 #define IMAGE_BMP_H
 #define dataImage(img, x, y) ((uchar*)(img)->imageData)[(y) * (img)->widthStep + (x) * (img)->nChannels]
 
@@ -101,7 +102,7 @@ namespace Image
 	
 	class improcessImage{
 		private:
-			const double color_radius = 6.5;
+	
 			IplImage* img;
 			void langgieng(IplImage *img, int x, int y, int A[]);
 			int dem(int A[]);
@@ -123,6 +124,7 @@ namespace Image
 			void ReleaseDoubleMatrix(double **&matrix,int size);
 	  
 		public:
+			
 			improcessImage(void);
 			~improcessImage(void);
 			improcessImage(IplImage* image);
@@ -137,6 +139,12 @@ namespace Image
 		    void closeImage(IplImage* binary);
 		    inline int color_distance( const IplImage* img, int x1, int y1, int x2, int y2 );
 		    int ECC(const IplImage* img, int **labels);
+		    IplImage* dilateGray(IplImage* grayImage );
+		    IplImage* erodeGray(IplImage* grayImage );
+			
+			IplImage* negative(IplImage* img_bin,int x_min,int x_max, int y_min, int y_max);
+			int** limits(IplImage* img_bin);
+			void thickening(IplImage* img);
 		    
 		    int CreateGeoMatchModel(const void* templateArr,double,double);
 			double FindGeoMatchModel(const void* srcarr,double minScore,double greediness, CvPoint *resultPoint);
@@ -151,48 +159,24 @@ void GaussianFilter( IplImage* gray,IplImage* out ,int KernelSize);
 
 int main(int argc, char** argv) {
 	
-	/*Image::improcessImage input;
-	
-	IplImage *img = cvLoadImage("C:\\thinning.bmp");
-
-	cvShowImage(" original image",img);
-
-	// Mean shift
-	int **ilabels = new int *[img->height];
-	for(int i=0;i<img->height;i++) ilabels[i] = new int [img->width];
-	int regionCount = input.ECC(img, ilabels);
-	vector<int> color(regionCount);
-	CvRNG rng= cvRNG(cvGetTickCount());
-	for(int i=0;i<regionCount;i++)
-		color[i] = cvRandInt(&rng);
-
-	// Draw random color
-	for(int i=0;i<img->height;i++)
-		for(int j=0;j<img->width;j++)
-		{ 
-			int cl = ilabels[i][j];
-			((uchar *)(img->imageData + i*img->widthStep))[j*img->nChannels + 0] = (color[cl])&255;
-			((uchar *)(img->imageData + i*img->widthStep))[j*img->nChannels + 1] = (color[cl]>>8)&255;
-			((uchar *)(img->imageData + i*img->widthStep))[j*img->nChannels + 2] = (color[cl]>>16)&255;
-		}
-	cvShowImage("MeanShift",img);
-	cvReleaseImage(&img);*/
-	
-	const   char *FILE_NAME = "lena.bmp";
+	const   char *FILE_NAME = "C:\\dilate.bmp";
 	char c=0;
         
-	cout<<"\n 0. Load image\n";
-	cout<<" 1. Convert RGB to gray\n";
-	cout<<" 2. Convert RGB to binary\n";
-	cout<<" 3. Dilate algorithm\n";
-	cout<<" 4. Erode algorithm\n";
-	cout<<" 5. Thining algorithm\n";
-	cout<<" 6. open image algorithm\n";
-	cout<<" 7. close image algorithm\n";
-	cout<<" 8. Extracting conected components and Region fill algorithm\n";
-	cout<<" 9. Canny algorithm\n";
+	cout<<"\n a. Load image\n";
+	cout<<" b. Convert RGB to gray\n";
+	cout<<" c. Convert RGB to binary\n";
+	cout<<" d. Dilate algorithm\n";
+	cout<<" e. Erode algorithm\n";
+	cout<<" f. Thining algorithm\n";
+	cout<<" g. open image algorithm\n";
+	cout<<" h. close image algorithm\n";
+	cout<<" i. Extracting conected components and Region fill algorithm\n";
+	cout<<" k. thickening algorithm\n";
+	cout<<" l. Canny algorithm\n";
+	cout<<" m. Dilate gray algorithm\n";
+	cout<<" n. Erode gray algorithm\n";
 	
-	cout<<" 0. exit\n";
+	cout<<" ESC. exit\n";
 	cout<<"\n Chu y: Bam X anh hien thi de tro ve menu\n";
 
 	cout<<"\n Moi nhap cac so theo chuc nang tren: ";
@@ -225,12 +209,14 @@ int main(int argc, char** argv) {
 		IplImage* imageOpen;
 		IplImage* imageClose;
 		IplImage* imageECC;
+		IplImage* img_bin;
 		
 		grayImage=cvCreateImage(cvSize(imageX,imageY),8,1);
 		binary=cvCreateImage(cvSize(imageX,imageY),8,1);
 		imageDilate=cvCreateImage(cvSize(imageX,imageY),8,1);
 		imageErode=cvCreateImage(cvSize(imageX,imageY),8,1);
 		thiningImage=cvCreateImage(cvSize(imageX,imageY),8,1);
+		img_bin=cvCreateImage(cvSize(imageX,imageY),8,1);
 	
 		imageOpen=cvCreateImage(cvSize(imageX,imageY),8,1);
 		imageClose=cvCreateImage(cvSize(imageX,imageY),8,1);
@@ -245,47 +231,48 @@ int main(int argc, char** argv) {
 		cvCopyImage(binary,imageOpen);
 		cvCopyImage(binary,imageClose);
 		cvCopyImage(binary,imageECC);
+		cvCopyImage(binary,img_bin);
 	    
-		if( c=='0') cvShowImage("helloWorld",image);
-		if( c=='1') cvShowImage("gray image",grayImage);
-		if( c=='2') cvShowImage("bianry image",binary);
+		if( c=='a') cvShowImage("helloWorld",image);
+		if( c=='b') cvShowImage("gray image",grayImage);
+		if( c=='c') cvShowImage("bianry image",binary);
 	
-		if( c=='3' ) 
+		if( c=='d' ) 
 		{
 			input.dilateImage(binary,imageDilate);
 			cvShowImage("bianry image",binary);
 			cvShowImage("dilate image",imageDilate);
 		}
 
-		if( c=='4' ) 
+		if( c=='e' ) 
 		{
 			input.erodeImage(binary,imageErode);
 			cvShowImage("bianry image",binary);
 			cvShowImage("erode image",imageErode);
 		}
 
-		if( c=='5' )
+		if( c=='f' )
 		{
 			input.Stentiford(thiningImage);
 			cvShowImage("bianry image",binary);
 			cvShowImage("thinning image",thiningImage);
 		}
 
-		if( c=='6' )
+		if( c=='g' )
 		{
 			input.openImage(imageOpen);
 			cvShowImage("bianry image",binary);
 			cvShowImage("open image",imageOpen);
 		}
 
-		if( c=='7' )
+		if( c=='h' )
 		{
 			input.closeImage(imageClose);
 			cvShowImage("bianry image",binary);
 			cvShowImage("close image",imageClose);
 		}
         
-        if( c=='8')
+        if( c=='i')
         {
         	IplImage* img;
         	
@@ -313,7 +300,57 @@ int main(int argc, char** argv) {
 			cvShowImage("MeanShift",img);
         }
         
-        if( c=='9')
+		if( c=='k')
+		{
+			cvShowImage("original",img_bin);
+
+			int **p;
+			p=input.limits(img_bin);
+			cout<<"\np min"<<p[0][0];
+
+			img_bin=input.negative(img_bin,p[0][0],p[0][1],p[1][0],p[1][1] );
+
+			//cvShowImage("negative",img_bin);
+
+			input.Stentiford(img_bin);
+
+			IplImage* img;
+        	
+			img = cvCreateImage(cvSize(img_bin->width, img_bin->height),8,3);
+			cvCvtColor(img_bin,img,CV_GRAY2BGR);
+        	
+			// Mean shift
+			int **ilabels = new int *[img->height];
+			for(int i=0;i<img->height;i++) ilabels[i] = new int [img->width];
+			int regionCount = input.ECC(img, ilabels);
+		
+			// Draw random color
+			for(int i=0;i<img->height;i++)
+				for(int j=0;j<img->width;j++)
+				{ 
+					int cl = ilabels[i][j];
+
+					if( ((uchar *)(img_bin->imageData + i*img_bin->widthStep))[j*img_bin->nChannels + 0]==255 )
+					{
+						((uchar *)(img->imageData + i*img->widthStep))[j*img->nChannels + 0] = 0;
+						((uchar *)(img->imageData + i*img->widthStep))[j*img->nChannels + 1] = 0;
+						((uchar *)(img->imageData + i*img->widthStep))[j*img->nChannels + 2] = 0;
+						continue;
+					}
+
+					if( cl!=0)
+					{
+						((uchar *)(img->imageData + i*img->widthStep))[j*img->nChannels + 0] = 255;
+						((uchar *)(img->imageData + i*img->widthStep))[j*img->nChannels + 1] = 255;
+						((uchar *)(img->imageData + i*img->widthStep))[j*img->nChannels + 2] = 255;
+					}
+				}
+
+			cvShowImage("result",img);
+
+		}
+
+        if( c=='l')
         {
         	IplImage* out =cvCreateImage( cvGetSize(grayImage) ,8,1 );
 			IplImage* canny =cvCreateImage( cvGetSize(grayImage) ,8,1 );
@@ -336,6 +373,32 @@ int main(int argc, char** argv) {
 			cvShowImage("out",canny);
         }
         
+        if( c=='m' )
+        {
+			IplImage* original=0;
+			original=cvLoadImage(FILE_NAME);
+			IplImage* gray= cvCreateImage(cvGetSize(original),8,1);
+
+			cvCvtColor(original,gray,CV_BGR2GRAY);
+
+        	IplImage* dilateGrayImage;
+        	dilateGrayImage = input.dilateGray(gray);
+			cvShowImage("dilate gray",dilateGrayImage);
+        }
+        
+		 if( c=='n' )
+        {
+			IplImage* original=0;
+			original=cvLoadImage(FILE_NAME);
+			IplImage* gray= cvCreateImage(cvGetSize(original),8,1);
+
+			cvCvtColor(original,gray,CV_BGR2GRAY);
+
+        	IplImage* dilateGrayImage;
+			dilateGrayImage = input.erodeGray(gray);
+			cvShowImage("dilate gray",dilateGrayImage);
+        }
+
 		cout<<"\n Successed\n"; 
 		cvWaitKey(0);
 		
@@ -1339,6 +1402,79 @@ int improcessImage::ECC(const IplImage* img, int **labels)
 	return regionCount;
 }
 
+int** improcessImage::limits(IplImage* img_bin)
+{
+	int **p;
+	
+	p=new int* [2];
+	for(int i=0; i< 2; i++)
+	{
+		p[i]=new int[2];
+	}
+
+	int x_min=10000;
+	int x_max=0;
+	int y_min=0;
+	int y_max=0;
+	int max=0;
+
+	for(int i=0; i< img_bin->height ; i++)
+	{
+		for(int j=0; j< img_bin->width ; j++)
+		{
+			if( ((uchar *)(img_bin->imageData + i*img_bin->widthStep))[j*img_bin->nChannels + 0]==255 &&
+				y_min==0 )
+			{
+				y_min=i;
+			}
+			if( ((uchar *)(img_bin->imageData + i*img_bin->widthStep))[j*img_bin->nChannels + 0]==255 )
+			{
+				y_max=i;
+			}
+
+			if( ((uchar *)(img_bin->imageData + i*img_bin->widthStep))[j*img_bin->nChannels + 0]==255 )
+			{
+				if( x_min > j ) x_min=j;
+			}
+
+			if( ((uchar *)(img_bin->imageData + i*img_bin->widthStep))[j*img_bin->nChannels + 0]==255 )
+			{
+				max=j;
+			}
+		}
+
+		if( x_max < max ) x_max=max;
+	}
+
+	p[0][0]=x_min;
+	p[0][1]=x_max;
+	p[1][0]=y_min;
+	p[1][1]=y_max;
+
+	return p;
+}
+
+IplImage* improcessImage::negative(IplImage* img_bin,int x_min,int x_max, int y_min, int y_max)
+{
+	for(int i=y_min-1; i<= y_max+1 ; i++)
+	{
+		for(int j=x_min-1; j<= x_max+1 ; j++)
+		{
+			if( ((uchar *)(img_bin->imageData + i*img_bin->widthStep))[j*img_bin->nChannels + 0]==255 )
+			{
+				((uchar *)(img_bin->imageData + i*img_bin->widthStep))[j*img_bin->nChannels + 0]=0;
+				continue;
+			}
+			else
+			{
+				((uchar *)(img_bin->imageData + i*img_bin->widthStep))[j*img_bin->nChannels + 0]=255;
+			}
+		}
+	}
+
+	return img_bin;
+}
+
 int improcessImage::CreateGeoMatchModel(const void *templateArr,double maxContrast,double minContrast)
 {
 	CvMat *gx = 0;		//Matrix to store X derivative
@@ -1657,4 +1793,96 @@ void improcessImage::DrawContours(IplImage* source,CvScalar color,int lineWidth)
 		point.x=cordinates[i].y + centerOfGravity.y;
 		cvLine(source,point,point,color,lineWidth);
 	}
+}
+
+IplImage* improcessImage::dilateGray(IplImage* grayImage)
+{
+	IplImage* dilateImage=cvCreateImage(cvGetSize(grayImage),8,1);
+	
+	int max=0;
+	int gt=0;
+
+	int kernel[5][5]={ {1,1,1},
+	                   {1,2,1},
+	                   {1,1,1} };
+
+	//cout<<(int)kernel[1][1];
+	
+	for(int i=1; i< grayImage->height-1 ; i++)
+	{
+		for(int j=1; j< grayImage->width-1 ; j++)
+		{
+			max=0;
+			gt=0;
+
+			for(int u=-1; u<=1 ; u++)
+			{
+				for(int v=-1; v<=1 ; v++)
+				{
+					gt=  kernel[u+1][v+1]+ 
+						 (int)((uchar *)(grayImage->imageData + (i+u)*grayImage->widthStep))[(j+v)*grayImage->nChannels + 0];
+
+					if( max <= gt ) max=gt;
+				}
+			}
+
+			if( max >= 255 )
+			{
+				((uchar *)(dilateImage->imageData + i*dilateImage->widthStep))[j*dilateImage->nChannels + 0]=255;
+			}
+			
+			if( max < 255 )
+			{
+				((uchar *)(dilateImage->imageData + i*dilateImage->widthStep))[j*dilateImage->nChannels + 0]=(uchar)max;
+			}
+		}
+	}
+	
+	return dilateImage;
+}
+
+IplImage* improcessImage::erodeGray(IplImage* grayImage)
+{
+	IplImage* dilateImage=cvCreateImage(cvGetSize(grayImage),8,1);
+	
+	int max=0;
+	int gt=0;
+
+	int kernel[5][5]={ {1,1,1},
+	                   {1,2,1},
+	                   {1,1,1} };
+
+	//cout<<(int)kernel[1][1];
+	
+	for(int i=1; i< grayImage->height-1 ; i++)
+	{
+		for(int j=1; j< grayImage->width-1 ; j++)
+		{
+			max=1000;
+			gt=0;
+
+			for(int u=-1; u<=1 ; u++)
+			{
+				for(int v=-1; v<=1 ; v++)
+				{
+					gt=  kernel[u+1][v+1]+ 
+						 (int)((uchar *)(grayImage->imageData + (i+u)*grayImage->widthStep))[(j+v)*grayImage->nChannels + 0];
+
+					if( max > gt ) max=gt;
+				}
+			}
+
+			if( max >= 255 )
+			{
+				((uchar *)(dilateImage->imageData + i*dilateImage->widthStep))[j*dilateImage->nChannels + 0]=255;
+			}
+			
+			if( max < 255 )
+			{
+				((uchar *)(dilateImage->imageData + i*dilateImage->widthStep))[j*dilateImage->nChannels + 0]=(uchar)max;
+			}
+		}
+	}
+	
+	return dilateImage;
 }
