@@ -146,6 +146,16 @@ namespace Image
 			int** limits(IplImage* img_bin);
 			void thickening(IplImage* img);
 		    
+		    void increase(int window[],int n);
+			int sumPixel(int window[],int n);
+			IplImage* medianFilter(IplImage* img,int n);
+			IplImage* meanFilter(IplImage* img,int n);
+			IplImage* convolution(IplImage* image, float window[][3] );
+			IplImage* LPF(IplImage* image);
+			IplImage* HPF(IplImage* image);
+			int computeOutput(int x, int r1, int s1, int r2, int s2);
+			IplImage* stretch_contract(IplImage* image);
+	
 		    int CreateGeoMatchModel(const void* templateArr,double,double);
 			double FindGeoMatchModel(const void* srcarr,double minScore,double greediness, CvPoint *resultPoint);
 			void DrawContours(IplImage* pImage,CvPoint COG,CvScalar,int);
@@ -175,8 +185,13 @@ int main(int argc, char** argv) {
 	cout<<" l. Canny algorithm\n";
 	cout<<" m. Dilate gray algorithm\n";
 	cout<<" n. Erode gray algorithm\n";
-	
-	cout<<" ESC. exit\n";
+	cout<<" o. median Filter algorithm\n";
+	cout<<" p. mean Filter algorithm\n";
+	cout<<" q. LPF filter algorithm\n";
+	cout<<" r. HPF filter algorithm\n";
+	cout<<" s. stretch contract algorithm\n";
+		
+	cout<<"\n ESC. exit\n";
 	cout<<"\n Chu y: Bam X anh hien thi de tro ve menu\n";
 
 	cout<<"\n Moi nhap cac so theo chuc nang tren: ";
@@ -398,7 +413,52 @@ int main(int argc, char** argv) {
 			dilateGrayImage = input.erodeGray(gray);
 			cvShowImage("dilate gray",dilateGrayImage);
         }
-
+        
+         if( c=='o' )
+        {
+			IplImage* median_Filter_Image;
+			median_Filter_Image = input.medianFilter(image,9);
+			
+			cvShowImage("original",image);
+			cvShowImage("median filter",median_Filter_Image);
+        }
+        
+        if( c=='p' )
+        {
+			IplImage* mean_Filter_Image;
+			mean_Filter_Image = input.meanFilter(image,9);
+			
+			cvShowImage("original",image);
+			cvShowImage("mean filter",mean_Filter_Image);
+        }
+        
+        if( c=='q' )
+        {
+        	IplImage* LPF_Filter_Image;
+        	LPF_Filter_Image = input.LPF(image);
+        	
+			cvShowImage("original",image);
+			cvShowImage("LPF filter",LPF_Filter_Image);
+        }
+        
+        if( c=='r' )
+        {
+        	IplImage* HPF_Filter_Image;
+        	HPF_Filter_Image = input.HPF(image);
+        	
+        	cvShowImage("original",image);
+        	cvShowImage("HPF filter",HPF_Filter_Image);
+        }
+        
+        if( c=='s' )
+        {
+        	IplImage* tretch_contract_Image;
+        	tretch_contract_Image = input.stretch_contract(image);
+        	
+        	cvShowImage("original",image);
+        	cvShowImage("contract image",tretch_contract_Image);
+        }
+        
 		cout<<"\n Successed\n"; 
 		cvWaitKey(0);
 		
@@ -1885,4 +1945,223 @@ IplImage* improcessImage::erodeGray(IplImage* grayImage)
 	}
 	
 	return dilateImage;
+}
+
+void improcessImage::increase(int window[],int n)
+{
+	int temp=0;
+	for( int i=0 ;i<n ;i++)
+	{
+		for( int j=0 ;j<n ;j++)
+		{
+			if( window[i]<window[j] )
+			{
+				temp=window[i];
+				window[i]=window[j];
+				window[j]=temp;
+			}
+		}
+	}
+}
+
+int improcessImage::sumPixel(int window[],int n)
+{
+	int sum=0;
+	for(int i=0; i< n ; i++)
+	{
+		sum+=window[i];
+	}
+	return sum;
+}
+
+IplImage* improcessImage::medianFilter(IplImage* img,int n)
+{
+	int window[9];
+	IplImage* outimg;
+	outimg=cvCreateImage(cvGetSize(img), IPL_DEPTH_8U, 3);
+
+	int proPixel=0;
+	uchar *data ;
+	uchar *Newdata ;
+	int anpha=0;
+
+	data=(uchar*)(img->imageData);
+	Newdata=(uchar*)(outimg->imageData);
+
+	for(int i=0 ;i<n;i++)
+	{
+		window[i]=0;
+	}
+
+	for( int i=1 ;i<img->height-1 ;i++)
+	{
+		for(int j=1 ;j<img->width-1 ;j++)
+		{
+			for( int k=0 ;k<3 ;k++)
+			{
+				Newdata[i*(outimg->widthStep)+j*(outimg->nChannels)+k]=0;
+				window[0]=(int)data[(i-1)*(img->widthStep)+ (j-1)*(img->nChannels)+k];
+				window[1]=(int)data[(i-1)*(img->widthStep)+ (j)*(img->nChannels)+k];
+				window[2]=(int)data[(i-1)*(img->widthStep)+ (j+1)*(img->nChannels)+k];
+				window[3]=(int)data[(i)*(img->widthStep)+ (j-1)*(img->nChannels)+k];
+				window[4]=(int)data[(i)*(img->widthStep)+ (j)*(img->nChannels)+k];
+				window[5]=(int)data[(i)*(img->widthStep)+ (j+1)*(img->nChannels)+k];
+				window[6]=(int)data[(i+1)*(img->widthStep)+ (j-1)*(img->nChannels)+k];
+				window[7]=(int)data[(i+1)*(img->widthStep)+ (j)*(img->nChannels)+k];
+				window[8]=(int)data[(i+1)*(img->widthStep)+ (j+1)*(img->nChannels)+k];
+
+				increase(window,n);
+
+				proPixel=window[4];
+
+				if( ( data[i*(img->widthStep)+ j*(img->nChannels)+k]-window[4])<=anpha )
+				{
+					Newdata[i*(outimg->widthStep)+j*(outimg->nChannels)+k]=data[(i)*(img->widthStep)+ (j)*(img->nChannels)+k];
+				}
+				
+				else 
+				{
+					Newdata[i*(outimg->widthStep)+j*(outimg->nChannels)+k]=(uchar)proPixel;
+				}
+			}
+		}
+	}
+	return outimg;
+}
+
+IplImage* improcessImage::meanFilter(IplImage* img,int n)
+{
+	int window[9];
+	IplImage* outimg;
+	outimg=cvCreateImage(cvGetSize(img), IPL_DEPTH_8U, 3);
+
+	uchar *data ;
+	uchar *Newdata ;
+	data=(uchar*)(img->imageData);
+	Newdata=(uchar*)(outimg->imageData);
+
+	int sum=0;
+
+	for(int i=0 ;i<n;i++)
+	{
+		window[i]=0;
+	}
+
+	for( int i=1 ;i<img->height-1 ;i++){
+		for(int j=1 ;j<img->width-1 ;j++){
+			for( int k=0 ;k<3 ;k++){
+				Newdata[i*(outimg->widthStep)+j*(outimg->nChannels)+k]=0;
+
+				window[0]=(int)data[(i-1)*(img->widthStep)+ (j-1)*(img->nChannels)+k];
+				window[1]=(int)data[(i-1)*(img->widthStep)+ (j)*(img->nChannels)+k];
+				window[2]=(int)data[(i-1)*(img->widthStep)+ (j+1)*(img->nChannels)+k];
+				window[3]=(int)data[(i)*(img->widthStep)+ (j-1)*(img->nChannels)+k];
+				window[4]=(int)data[(i)*(img->widthStep)+ (j)*(img->nChannels)+k];
+				window[5]=(int)data[(i)*(img->widthStep)+ (j+1)*(img->nChannels)+k];
+				window[6]=(int)data[(i+1)*(img->widthStep)+ (j-1)*(img->nChannels)+k];
+				window[7]=(int)data[(i+1)*(img->widthStep)+ (j)*(img->nChannels)+k];
+				window[8]=(int)data[(i+1)*(img->widthStep)+ (j+1)*(img->nChannels)+k];
+
+				sum=sumPixel(window,n);
+
+				sum=sum/9;
+
+				Newdata[i*(outimg->widthStep)+j*(outimg->nChannels)+k]=(uchar)sum;
+			}
+		}
+	}
+	return outimg;
+}
+
+IplImage* improcessImage::convolution(IplImage* image, float window[][3] )
+{
+	IplImage* output_image=cvCreateImage(cvGetSize(image),8,3);
+	float sum=0;
+
+	for(int i=1; i< image->height-1 ; i++){
+		for(int j=1; j< image->width -1 ; j++ ){
+			for(int k=0; k< 3 ; k++){
+				sum=0;
+				for(int u=-1; u<=1 ; u++){
+					for(int v=-1; v<=1 ; v++){
+						sum+=(float)((uchar *)(image->imageData + (i+u)*image->widthStep))[(j+v)*image->nChannels + k]*(float)window[u+1][v+1];}
+				}
+				((uchar *)(output_image->imageData + i*output_image->widthStep))[j*output_image->nChannels + k]=(uchar)(int)sum;
+			}
+		}
+	}
+
+	return output_image;
+}
+
+IplImage* improcessImage::LPF(IplImage* image)
+{
+	IplImage* LPF_image=cvCreateImage(cvGetSize(image),8,3);
+
+	float window[3][3]={    {0,0.125,0},
+	                     {0.125,0.5,0.125},
+	                        {0,0.125,0}     };
+
+	LPF_image = convolution(image,window);
+
+	return LPF_image;
+}
+
+IplImage* improcessImage::HPF(IplImage* image)
+{
+	IplImage* HPF_image=cvCreateImage(cvGetSize(image),8,3);
+
+	float window[3][3]={   {0,-0.25,0},
+	                     {-0.25,2,-0.25},
+	                       {0,-0.25,0}     };
+
+	HPF_image = convolution(image,window);
+
+	return HPF_image;
+}
+
+
+int improcessImage::computeOutput(int x, int r1, int s1, int r2, int s2)
+{
+    float result;
+    if(0 <= x && x <= r1){
+        result = s1/r1 * x;
+    }else if(r1 < x && x <= r2){
+        result = ((s2 - s1)/(r2 - r1)) * (x - r1) + s1;
+    }else if(r2 < x && x <= 255){
+        result = ((255 - s2)/(255 - r2)) * (x - r2) + s2;
+    }
+
+    return (int)result;
+}
+
+IplImage* improcessImage::stretch_contract(IplImage* image)
+{
+	IplImage* output_image=cvCreateImage(cvGetSize(image),8,3);
+
+	int r1, s1, r2, s2;
+	r1=70; s1=0;
+	r2=140; s2=255;
+
+	int color=0;
+
+	for(int i = 0; i < image->height; i++){
+		for(int j = 0; j < image->width; j++){
+            for(int k = 0; k < 3; k++){
+
+				color = (int)((uchar *)(image->imageData + i*image->widthStep))[j*image->nChannels + k];
+
+                int output = computeOutput(color, r1, s1, r2, s2);
+
+				if( output < 0 ) ((uchar *)(output_image->imageData + i*output_image->widthStep))[j*output_image->nChannels + k]=0;
+
+				if( output > 255 ) ((uchar *)(output_image->imageData + i*output_image->widthStep))[j*output_image->nChannels + k]=255;
+
+                if( output <= 255 && output >= 0 ) 
+					((uchar *)(output_image->imageData + i*output_image->widthStep))[j*output_image->nChannels + k]=(uchar)output;
+            }
+        }
+    }
+
+	return output_image;
 }
